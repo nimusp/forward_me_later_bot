@@ -9,6 +9,21 @@ import (
 
 const timeRegexpPattern = "^([0-9]|0[0-9]|1[0-9]|2[0-3]):([0-9]|[0-5][0-9])$"
 
+// command list
+const (
+	startCommand   = "start"
+	setTimeCommand = "set_time_to_forward"
+	giveItCommand  = "give_it_all_right_now"
+)
+
+// command handler message
+const (
+	setTimeCommandMessage   = "Enter time in which you want to receive all daily messages. \nFormat: HH:mm"
+	startCommandMessage     = "Received /start"
+	giveItAllCommandMessage = "Received /give_it_all_right_now"
+	wrongCommandMessage     = "I don't know that command"
+)
+
 type MessageHandler struct {
 	bot     *tgbotapi.BotAPI
 	storage *MessageStorage
@@ -65,14 +80,14 @@ func handleCommandMessage(update tgbotapi.Update) string {
 	var answer string
 
 	switch update.Message.Command() {
-	case "start":
-		answer = "Received /start"
-	case "set_time_to_forward":
-		answer = "Enter time in which you want to receive all daily messages. \nFormat: HH:mm"
-	case "give_it_all_right_now":
-		answer = "Received /give_it_all_right_now"
+	case startCommand:
+		answer = startCommandMessage
+	case setTimeCommand:
+		answer = setTimeCommandMessage
+	case giveItCommand:
+		answer = giveItAllCommandMessage
 	default:
-		answer = "I don't know that command"
+		answer = wrongCommandMessage
 	}
 
 	return answer
