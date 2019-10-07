@@ -25,8 +25,9 @@ const (
 )
 
 type MessageHandler struct {
-	bot     *tgbotapi.BotAPI
-	storage *MessageStorage
+	bot            *tgbotapi.BotAPI
+	storage        *MessageStorage
+	chatToSettings map[int64]bool
 }
 
 func NewHandler(token string, storage *MessageStorage) *MessageHandler {
@@ -35,8 +36,9 @@ func NewHandler(token string, storage *MessageStorage) *MessageHandler {
 		log.Fatal(err)
 	}
 	return &MessageHandler{
-		bot:     telegramBot,
-		storage: storage,
+		bot:            telegramBot,
+		storage:        storage,
+		chatToSettings: make(map[int64]bool, 0),
 	}
 }
 
@@ -56,33 +58,39 @@ func (h *MessageHandler) Start() {
 		messageText := event.Message.Text
 
 		messageToUser := tgbotapi.NewMessage(chatID, "")
-
-		if event.Message.IsCommand() {
-			commandAnswer := handleCommandMessage(event)
+		isCommand := event.Message.IsCommand()
+		if isCommand {
+			commandAnswer := h.handleCommandMessage(event, chatID)
 			messageToUser.Text = commandAnswer
 		}
 
-		if timePattern.MatchString(event.Message.Text) {
-			h.storage.UpdateUserSettings(chatID, messageText)
-			messageToUser.Text = "Received time: " + event.Message.Text
-			log.Println("Set time " + messageText + " for chat " + string(chatID))
-		} else {
+		isUserTunned := h.storage.isUserTunned(chatID)
+		if isUserTunned && !isCommand {
 			h.storage.AddMessage(chatID, messageText)
 		}
 
-		if _, err := h.bot.Send(messageToUser); err != nil {
-			log.Println(err)
+		if timePattern.MatchString(event.Message.Text) && h.chatToSettings[chatID] {
+			h.chatToSettings[chatID] = false
+			h.storage.UpdateUserSettings(chatID, messageText)
+			messageToUser.Text = "Received time: " + event.Message.Text
+		}
+
+		if messageToUser.Text != "" {
+			if _, err := h.bot.Send(messageToUser); err != nil {
+				log.Println(err)
+			}
 		}
 	}
 }
 
-func handleCommandMessage(update tgbotapi.Update) string {
+func (h *MessageHandler) handleCommandMessage(update tgbotapi.Update, chatID int64) string {
 	var answer string
 
 	switch update.Message.Command() {
 	case startCommand:
 		answer = startCommandMessage
 	case setTimeCommand:
+		h.chatToSettings[chatID] = true
 		answer = setTimeCommandMessage
 	case giveItCommand:
 		answer = giveItAllCommandMessage
