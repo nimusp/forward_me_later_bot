@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"regexp"
+	"sync"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
@@ -24,10 +26,16 @@ const (
 	wrongCommandMessage     = "I don't know that command"
 )
 
+type messageForwarder struct {
+	bot     *tgbotapi.BotAPI
+	storage *MessageStorage
+}
+
 type MessageHandler struct {
 	bot            *tgbotapi.BotAPI
 	storage        *MessageStorage
 	chatToSettings map[int64]bool
+	forwarder      *messageForwarder
 }
 
 func NewHandler(token string, storage *MessageStorage) *MessageHandler {
@@ -35,10 +43,17 @@ func NewHandler(token string, storage *MessageStorage) *MessageHandler {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	forwarder := &messageForwarder{
+		bot:     telegramBot,
+		storage: storage,
+	}
+
 	return &MessageHandler{
 		bot:            telegramBot,
 		storage:        storage,
 		chatToSettings: make(map[int64]bool, 0),
+		forwarder:      forwarder,
 	}
 }
 
@@ -48,6 +63,7 @@ func (h *MessageHandler) Start() {
 
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = 60
+	go h.forwarder.start()
 
 	updateEvents, _ := h.bot.GetUpdatesChan(updateConfig)
 	for event := range updateEvents {
@@ -66,7 +82,9 @@ func (h *MessageHandler) Start() {
 
 		isUserTunned := h.storage.isUserTunned(chatID)
 		if isUserTunned && !isCommand {
+			// event.Message.MessageID
 			h.storage.AddMessage(chatID, messageText)
+			continue
 		}
 
 		if timePattern.MatchString(event.Message.Text) && h.chatToSettings[chatID] {
@@ -75,10 +93,8 @@ func (h *MessageHandler) Start() {
 			messageToUser.Text = "Received time: " + event.Message.Text
 		}
 
-		if messageToUser.Text != "" {
-			if _, err := h.bot.Send(messageToUser); err != nil {
-				log.Println(err)
-			}
+		if _, err := h.bot.Send(messageToUser); err != nil {
+			log.Println(err)
 		}
 	}
 }
@@ -99,4 +115,42 @@ func (h *MessageHandler) handleCommandMessage(update tgbotapi.Update, chatID int
 	}
 
 	return answer
+}
+
+func (m *messageForwarder) start() {
+	mutex := &sync.Mutex{}
+	ticker := time.NewTicker(500 * time.Millisecond)
+	updateTicker := time.NewTicker(5 * time.Second)
+
+	chatToMessageList, chatToTime := m.storage.getAllSheduledJobs()
+
+	for {
+		select {
+		case <-ticker.C:
+			for chat, messageList := range chatToMessageList {
+				if len(messageList) > 0 {
+					chatTime := chatToTime[chat]
+					currentTime := time.Now()
+
+					if currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() > chatTime.Minute() {
+						for _, messageToForward := range messageList {
+							message := tgbotapi.NewMessage(chat, messageToForward)
+							if _, err := m.bot.Send(message); err != nil {
+								log.Println(err)
+							}
+						}
+						chatToMessageList[chat] = make([]string, 0)
+						mutex.Lock()
+						m.storage.DeleteMessageForChat(chat)
+						mutex.Unlock()
+					}
+				}
+			}
+		case <-updateTicker.C:
+			mutex.Lock()
+			chatToMessageList, chatToTime = m.storage.getAllSheduledJobs()
+			mutex.Unlock()
+		default:
+		}
+	}
 }
