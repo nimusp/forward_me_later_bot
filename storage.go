@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"strconv"
+	"time"
 )
 
 type MessageStorage struct {
@@ -13,22 +14,22 @@ type MessageStorage struct {
 
 type user struct {
 	chatID int64
-	time   string
+	time   time.Time
 }
 
 func NewStorage() *MessageStorage {
-	storage := MessageStorage{
+	return &MessageStorage{
 		userList: make(map[int64]*user, 0),
 		data:     make(map[user][]string),
 	}
-	storage.start()
-	return &storage
 }
 
-func (s *MessageStorage) AddUser(chatID int64, time string) {
+func (s *MessageStorage) AddUser(chatID int64, stringTime string) {
+	castedTime := parseTime(stringTime)
+
 	user := user{
 		chatID: chatID,
-		time:   time,
+		time:   castedTime,
 	}
 	s.userList[chatID] = &user
 }
@@ -50,7 +51,7 @@ func (s *MessageStorage) UpdateUserSettings(chatID int64, time string) {
 		}
 		s.userList[chatID] = usr
 	}
-	usr.time = time
+	usr.time = parseTime(time)
 	log.Println("Set " + time + " for chat " + strconv.FormatInt(chatID, 10))
 }
 
@@ -59,14 +60,40 @@ func (s *MessageStorage) isUserTunned(chatID int64) bool {
 	return isExist
 }
 
-func (s *MessageStorage) start() {
-	//start cron
-}
-
 func (s *MessageStorage) findUser(chatID int64) (*user, error) {
 	user, isExist := s.userList[chatID]
 	if !isExist {
 		return nil, errors.New("user by chatID " + strconv.FormatInt(chatID, 10) + " not found")
 	}
 	return user, nil
+}
+
+func (s *MessageStorage) DeleteMessageForChat(chatID int64) {
+	user, err := s.findUser(chatID)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	s.data[*user] = make([]string, 0)
+}
+
+func parseTime(stringTime string) time.Time {
+	timeFormat := "15:04"
+	castedTime, err := time.Parse(timeFormat, stringTime)
+	if err != nil {
+		log.Println(err)
+	}
+	return castedTime
+}
+
+func (s *MessageStorage) getAllSheduledJobs() (map[int64][]string, map[int64]time.Time) {
+	chatToMessage := make(map[int64][]string, len(s.data))
+	chatToTime := make(map[int64]time.Time, len(s.data))
+
+	for user, messageList := range s.data {
+		chatToMessage[user.chatID] = messageList
+		chatToTime[user.chatID] = user.time
+	}
+
+	return chatToMessage, chatToTime
 }
