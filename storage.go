@@ -85,11 +85,13 @@ func parseTime(stringTime string) time.Time {
 	}
 
 	now := time.Now()
-	now.Add(
+	currentDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	correctTime := currentDay.Add(
 		time.Hour*time.Duration(castedTime.Hour()) + time.Minute*time.Duration(castedTime.Minute()),
 	)
 
-	return now
+	return correctTime
 }
 
 func (s *MessageStorage) getAllSheduledJobs() (map[int64][]int, map[int64]time.Time) {
