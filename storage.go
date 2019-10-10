@@ -9,7 +9,7 @@ import (
 
 type MessageStorage struct {
 	userList map[int64]*user
-	data     map[user][]string
+	data     map[user][]int
 }
 
 type user struct {
@@ -20,7 +20,7 @@ type user struct {
 func NewStorage() *MessageStorage {
 	return &MessageStorage{
 		userList: make(map[int64]*user, 0),
-		data:     make(map[user][]string),
+		data:     make(map[user][]int),
 	}
 }
 
@@ -34,13 +34,13 @@ func (s *MessageStorage) AddUser(chatID int64, stringTime string) {
 	s.userList[chatID] = &user
 }
 
-func (s *MessageStorage) AddMessage(chatID int64, message string) {
+func (s *MessageStorage) AddMessage(chatID int64, messageID int) {
 	user, err := s.findUser(chatID)
 	if err != nil {
 		return
 	}
-	s.data[*user] = append(s.data[*user], message)
-	log.Println("Chat: " + strconv.FormatInt(chatID, 10) + " message: " + message)
+	s.data[*user] = append(s.data[*user], messageID)
+	log.Println("Chat: " + strconv.FormatInt(chatID, 10) + " message: " + strconv.Itoa(messageID))
 }
 
 func (s *MessageStorage) UpdateUserSettings(chatID int64, time string) {
@@ -74,7 +74,7 @@ func (s *MessageStorage) DeleteMessageForChat(chatID int64) {
 		log.Println(err)
 		return
 	}
-	s.data[*user] = make([]string, 0)
+	s.data[*user] = make([]int, 0)
 }
 
 func parseTime(stringTime string) time.Time {
@@ -83,11 +83,17 @@ func parseTime(stringTime string) time.Time {
 	if err != nil {
 		log.Println(err)
 	}
-	return castedTime
+
+	now := time.Now()
+	now.Add(
+		time.Hour*time.Duration(castedTime.Hour()) + time.Minute*time.Duration(castedTime.Minute()),
+	)
+
+	return now
 }
 
-func (s *MessageStorage) getAllSheduledJobs() (map[int64][]string, map[int64]time.Time) {
-	chatToMessage := make(map[int64][]string, len(s.data))
+func (s *MessageStorage) getAllSheduledJobs() (map[int64][]int, map[int64]time.Time) {
+	chatToMessage := make(map[int64][]int, len(s.data))
 	chatToTime := make(map[int64]time.Time, len(s.data))
 
 	for user, messageList := range s.data {

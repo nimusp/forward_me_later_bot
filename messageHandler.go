@@ -81,9 +81,8 @@ func (h *MessageHandler) Start() {
 		}
 
 		isUserTunned := h.storage.isUserTunned(chatID)
-		if isUserTunned && !isCommand {
-			// event.Message.MessageID
-			h.storage.AddMessage(chatID, messageText)
+		if isUserTunned && !isCommand && !h.chatToSettings[chatID] {
+			h.storage.AddMessage(chatID, event.Message.MessageID)
 			continue
 		}
 
@@ -132,17 +131,22 @@ func (m *messageForwarder) start() {
 					chatTime := chatToTime[chat]
 					currentTime := time.Now()
 
-					if currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() > chatTime.Minute() {
-						for _, messageToForward := range messageList {
-							message := tgbotapi.NewMessage(chat, messageToForward)
-							if _, err := m.bot.Send(message); err != nil {
-								log.Println(err)
+					isCorrectTime := isTimeSetNotToday(chatTime)
+
+					if isCorrectTime {
+						if currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() > chatTime.Minute() {
+							for _, messageID := range messageList {
+								message := tgbotapi.NewMessage(chat, "received today")
+								message.ReplyToMessageID = messageID
+								if _, err := m.bot.Send(message); err != nil {
+									log.Println(err)
+								}
 							}
+							chatToMessageList[chat] = make([]int, 0)
+							mutex.Lock()
+							m.storage.DeleteMessageForChat(chat)
+							mutex.Unlock()
 						}
-						chatToMessageList[chat] = make([]string, 0)
-						mutex.Lock()
-						m.storage.DeleteMessageForChat(chat)
-						mutex.Unlock()
 					}
 				}
 			}
@@ -153,4 +157,21 @@ func (m *messageForwarder) start() {
 		default:
 		}
 	}
+}
+
+func isTimeSetNotToday(chatTime time.Time) bool {
+	currentTime := time.Now()
+
+	currentDay := currentTime.Day()
+	currentMonth := currentTime.Month()
+	currentYear := currentTime.Year()
+
+	t := chatTime.Year()
+	if t > 1 {
+
+	}
+
+	return currentYear > chatTime.Year() ||
+		currentYear == chatTime.Year() && currentMonth > chatTime.Month() ||
+		currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay > chatTime.Day()
 }
