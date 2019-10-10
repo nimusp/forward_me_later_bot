@@ -132,21 +132,22 @@ func (m *messageForwarder) start() {
 					currentTime := time.Now()
 
 					isCorrectTime := isTimeSetNotToday(chatTime)
+					if !isCorrectTime {
+						continue
+					}
 
-					if isCorrectTime {
-						if currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() > chatTime.Minute() {
-							for _, messageID := range messageList {
-								message := tgbotapi.NewMessage(chat, "received today")
-								message.ReplyToMessageID = messageID
-								if _, err := m.bot.Send(message); err != nil {
-									log.Println(err)
-								}
+					if currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() > chatTime.Minute() {
+						for _, messageID := range messageList {
+							message := tgbotapi.NewMessage(chat, "received today")
+							message.ReplyToMessageID = messageID
+							if _, err := m.bot.Send(message); err != nil {
+								log.Println(err)
 							}
-							chatToMessageList[chat] = make([]int, 0)
-							mutex.Lock()
-							m.storage.DeleteMessageForChat(chat)
-							mutex.Unlock()
 						}
+						chatToMessageList[chat] = make([]int, 0)
+						mutex.Lock()
+						m.storage.DeleteMessageForChat(chat)
+						mutex.Unlock()
 					}
 				}
 			}
@@ -166,12 +167,12 @@ func isTimeSetNotToday(chatTime time.Time) bool {
 	currentMonth := currentTime.Month()
 	currentYear := currentTime.Year()
 
-	t := chatTime.Year()
-	if t > 1 {
+	isSetTodayBeforeTime := currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay == chatTime.Day() &&
+		(currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() >= chatTime.Minute())
 
-	}
-
-	return currentYear > chatTime.Year() ||
+	isSetTomorowOrBefore := currentYear > chatTime.Year() ||
 		currentYear == chatTime.Year() && currentMonth > chatTime.Month() ||
 		currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay > chatTime.Day()
+
+	return isSetTomorowOrBefore || isSetTodayBeforeTime
 }
