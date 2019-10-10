@@ -144,10 +144,12 @@ func (m *messageForwarder) start() {
 								log.Println(err)
 							}
 						}
-						chatToMessageList[chat] = make([]int, 0)
 						mutex.Lock()
+						chatToMessageList[chat] = make([]int, 0)
 						m.storage.DeleteMessageForChat(chat)
+						chatToMessageList, chatToTime = m.storage.getAllSheduledJobs()
 						mutex.Unlock()
+						break
 					}
 				}
 			}
