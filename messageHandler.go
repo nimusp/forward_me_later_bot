@@ -15,15 +15,13 @@ const timeRegexpPattern = "^([0-9]|0[0-9]|1[0-9]|2[0-3]):([0-9]|[0-5][0-9])$"
 const (
 	startCommand   = "start"
 	setTimeCommand = "set_time_to_forward"
-	giveItCommand  = "give_it_all_right_now"
 )
 
 // command handler message
 const (
-	setTimeCommandMessage   = "Enter time in which you want to receive all daily messages. \nFormat: HH:mm"
-	startCommandMessage     = "Received /start"
-	giveItAllCommandMessage = "Received /give_it_all_right_now"
-	wrongCommandMessage     = "I don't know that command"
+	setTimeCommandMessage = "Enter time in which you want to receive all daily messages. \nFormat: HH:mm"
+	startCommandMessage   = "Received /start"
+	wrongCommandMessage   = "I don't know that command"
 )
 
 type messageForwarder struct {
@@ -107,8 +105,6 @@ func (h *MessageHandler) handleCommandMessage(update tgbotapi.Update, chatID int
 	case setTimeCommand:
 		h.chatToSettings[chatID] = true
 		answer = setTimeCommandMessage
-	case giveItCommand:
-		answer = giveItAllCommandMessage
 	default:
 		answer = wrongCommandMessage
 	}
