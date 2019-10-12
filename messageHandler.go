@@ -78,8 +78,7 @@ func (h *MessageHandler) Start() {
 			messageToUser.Text = commandAnswer
 		}
 
-		isUserTunned := h.storage.isUserTunned(chatID)
-		if isUserTunned && !isCommand && !h.isNowConfigurable[chatID] {
+		if !isCommand && !h.isNowConfigurable[chatID] {
 			h.storage.AddMessage(chatID, event.Message.MessageID)
 			continue
 		}
@@ -114,8 +113,8 @@ func (h *MessageHandler) handleCommandMessage(update tgbotapi.Update, chatID int
 
 func (m *messageForwarder) start() {
 	mutex := &sync.Mutex{}
-	ticker := time.NewTicker(500 * time.Millisecond)
-	updateTicker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
+	updateTicker := time.NewTicker(1 * time.Minute)
 
 	chatToMessageList, chatToTime := m.storage.getAllSheduledJobs()
 
@@ -124,9 +123,10 @@ func (m *messageForwarder) start() {
 		case <-ticker.C:
 			for chat, messageList := range chatToMessageList {
 				if len(messageList) > 0 {
+					listToDelete := make([]int, 0, len(messageList))
 					chatTime := chatToTime[chat]
 
-					for _, message := range messageList {
+					for idx, message := range messageList {
 						if isReadyToSend(chatTime, message.AddedAtTime) {
 							messageToForward := tgbotapi.NewMessage(chat, "received today")
 							messageToForward.ReplyToMessageID = message.MessageID
@@ -134,11 +134,18 @@ func (m *messageForwarder) start() {
 								log.Println(err)
 							}
 							m.storage.DeleteMessageByID(message.MessageID)
+							listToDelete = append(listToDelete, idx)
 						}
 					}
-					mutex.Lock()
-					chatToMessageList, chatToTime = m.storage.getAllSheduledJobs()
-					mutex.Unlock()
+
+					if len(listToDelete) > 0 {
+						mutex.Lock()
+						for _, idxToDelete := range listToDelete {
+							currentList := chatToMessageList[chat]
+							currentList = append(currentList[:idxToDelete], currentList[idxToDelete+1:]...)
+						}
+						mutex.Unlock()
+					}
 				}
 			}
 		case <-updateTicker.C:

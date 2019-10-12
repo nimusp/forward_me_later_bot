@@ -37,6 +37,10 @@ func NewStorage(dbLogin, dbPassword, dbName string) *MessageStorage {
 }
 
 func (s *MessageStorage) AddMessage(chatID int64, messageID int) {
+	if !s.isUserTunned(chatID) {
+		return
+	}
+
 	stmt, err := s.db.Prepare(
 		`INSERT INTO messages (chat_id, message_id, added_at)
 		 VALUES ($1, $2, $3)`,
