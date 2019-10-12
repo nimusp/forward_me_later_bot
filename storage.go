@@ -15,11 +15,6 @@ type MessageStorage struct {
 	userList map[int64]bool
 }
 
-type user struct {
-	chatID int64
-	time   time.Time
-}
-
 func NewStorage(dbLogin, dbPassword, dbName string) *MessageStorage {
 	dataSourseName := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", dbLogin, dbPassword, dbName)
 	db, err := sql.Open("postgres", dataSourseName)
