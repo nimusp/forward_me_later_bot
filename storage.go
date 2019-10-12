@@ -15,6 +15,11 @@ type MessageStorage struct {
 	userList map[int64]bool
 }
 
+type Message struct {
+	MessageID   int
+	AddedAtTime time.Time
+}
+
 func NewStorage(dbLogin, dbPassword, dbName string) *MessageStorage {
 	dataSourseName := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", dbLogin, dbPassword, dbName)
 	db, err := sql.Open("postgres", dataSourseName)
@@ -33,8 +38,8 @@ func NewStorage(dbLogin, dbPassword, dbName string) *MessageStorage {
 
 func (s *MessageStorage) AddMessage(chatID int64, messageID int) {
 	stmt, err := s.db.Prepare(
-		`INSERT INTO messages (user_chat_id, chat_message_id)
-		 VALUES ($1, $2)`,
+		`INSERT INTO messages (chat_id, message_id, added_at)
+		 VALUES ($1, $2, $3)`,
 	)
 	if err != nil {
 		log.Println(err)
@@ -42,7 +47,7 @@ func (s *MessageStorage) AddMessage(chatID int64, messageID int) {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(chatID, messageID)
+	_, err = stmt.Exec(chatID, messageID, time.Now())
 	if err != nil {
 		log.Println(err)
 	}
@@ -54,8 +59,9 @@ func (s *MessageStorage) UpdateUserSettings(chatID int64, time string) {
 	parsedTime := parseTime(time)
 
 	stmt, err := s.db.Prepare(
-		`INSERT INTO users (chat_id, time_to_forward)
-		 VALUES ($1, $2)`,
+		`INSERT INTO chats (id, time_to_forward)
+		 VALUES ($1, $2)
+		 ON CONFLICT (id) DO UPDATE SET time_to_forward=$2`,
 	)
 	if err != nil {
 		log.Println(err)
@@ -77,8 +83,8 @@ func (s *MessageStorage) isUserTunned(chatID int64) bool {
 	if !isExist {
 		stmt, err := s.db.Prepare(
 			`SELECT COUNT(*)
-			 FROM users
-			 WHERE users.chat_id = $1`,
+			 FROM chats
+			 WHERE chats.id = $1`,
 		)
 		if err != nil {
 			log.Println(err)
@@ -97,10 +103,10 @@ func (s *MessageStorage) isUserTunned(chatID int64) bool {
 	return isExist
 }
 
-func (s *MessageStorage) DeleteMessageForChat(chatID int64) {
+func (s *MessageStorage) DeleteMessageByID(messageID int) {
 	stmt, err := s.db.Prepare(
 		`DELETE FROM messages
-		 WHERE messages.user_chat_id = $1`,
+		 WHERE messages.message_id = $1`,
 	)
 	if err != nil {
 		log.Println(err)
@@ -108,7 +114,7 @@ func (s *MessageStorage) DeleteMessageForChat(chatID int64) {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(chatID)
+	_, err = stmt.Exec(messageID)
 }
 
 func parseTime(stringTime string) time.Time {
@@ -128,27 +134,27 @@ func parseTime(stringTime string) time.Time {
 	return correctTime
 }
 
-func (s *MessageStorage) getAllSheduledJobs() (map[int64][]int, map[int64]time.Time) {
+func (s *MessageStorage) getAllSheduledJobs() (map[int64][]Message, map[int64]time.Time) {
 	size := s.db.QueryRow(
-		`SELECT COUNT(messages.chat_message_id)
+		`SELECT COUNT(messages.message_id)
 		 FROM messages
-		 GROUP BY messages.chat_message_id
+		 GROUP BY messages.message_id
 		 ORDER BY DESC
 		 LIMIT 1`,
 	)
 	var dataSize int
 	size.Scan(&dataSize)
 
-	chatToMessage := make(map[int64][]int, dataSize)
+	chatToMessage := make(map[int64][]Message, dataSize)
 	chatToTime := make(map[int64]time.Time, dataSize)
 
 	rows, err := s.db.Query(
-		`SELECT messages.user_chat_id, messages.chat_message_id
+		`SELECT messages.chat_id, messages.message_id, messages.added_at
 		 FROM messages`,
 	)
 	if err != nil {
 		log.Println(err)
-		first := make(map[int64][]int)
+		first := make(map[int64][]Message)
 		second := make(map[int64]time.Time)
 		return first, second
 	}
@@ -157,17 +163,19 @@ func (s *MessageStorage) getAllSheduledJobs() (map[int64][]int, map[int64]time.T
 	for rows.Next() {
 		var chatID int64
 		var messageID int
-		rows.Scan(&chatID, &messageID)
-		chatToMessage[chatID] = append(chatToMessage[chatID], messageID)
+		var addedAt time.Time
+		rows.Scan(&chatID, &messageID, &addedAt)
+		message := Message{MessageID: messageID, AddedAtTime: addedAt}
+		chatToMessage[chatID] = append(chatToMessage[chatID], message)
 	}
 
 	userRows, err := s.db.Query(
-		`SELECT users.chat_id, users.time_to_forward
-		 FROM users`,
+		`SELECT chats.id, chats.time_to_forward
+		 FROM chats`,
 	)
 	if err != nil {
 		log.Println(err)
-		first := make(map[int64][]int)
+		first := make(map[int64][]Message)
 		second := make(map[int64]time.Time)
 		return first, second
 	}

@@ -30,10 +30,10 @@ type messageForwarder struct {
 }
 
 type MessageHandler struct {
-	bot            *tgbotapi.BotAPI
-	storage        *MessageStorage
-	chatToSettings map[int64]bool
-	forwarder      *messageForwarder
+	bot               *tgbotapi.BotAPI
+	storage           *MessageStorage
+	isNowConfigurable map[int64]bool
+	forwarder         *messageForwarder
 }
 
 func NewHandler(token string, storage *MessageStorage) *MessageHandler {
@@ -48,10 +48,10 @@ func NewHandler(token string, storage *MessageStorage) *MessageHandler {
 	}
 
 	return &MessageHandler{
-		bot:            telegramBot,
-		storage:        storage,
-		chatToSettings: make(map[int64]bool, 0),
-		forwarder:      forwarder,
+		bot:               telegramBot,
+		storage:           storage,
+		isNowConfigurable: make(map[int64]bool, 0),
+		forwarder:         forwarder,
 	}
 }
 
@@ -79,13 +79,13 @@ func (h *MessageHandler) Start() {
 		}
 
 		isUserTunned := h.storage.isUserTunned(chatID)
-		if isUserTunned && !isCommand && !h.chatToSettings[chatID] {
+		if isUserTunned && !isCommand && !h.isNowConfigurable[chatID] {
 			h.storage.AddMessage(chatID, event.Message.MessageID)
 			continue
 		}
 
-		if timePattern.MatchString(event.Message.Text) && h.chatToSettings[chatID] {
-			h.chatToSettings[chatID] = false
+		if timePattern.MatchString(event.Message.Text) && h.isNowConfigurable[chatID] {
+			h.isNowConfigurable[chatID] = false
 			h.storage.UpdateUserSettings(chatID, messageText)
 			messageToUser.Text = "Received time: " + event.Message.Text
 		}
@@ -103,7 +103,7 @@ func (h *MessageHandler) handleCommandMessage(update tgbotapi.Update, chatID int
 	case startCommand:
 		answer = startCommandMessage
 	case setTimeCommand:
-		h.chatToSettings[chatID] = true
+		h.isNowConfigurable[chatID] = true
 		answer = setTimeCommandMessage
 	default:
 		answer = wrongCommandMessage
@@ -125,28 +125,20 @@ func (m *messageForwarder) start() {
 			for chat, messageList := range chatToMessageList {
 				if len(messageList) > 0 {
 					chatTime := chatToTime[chat]
-					currentTime := time.Now()
 
-					isCorrectTime := isTimeSetNotToday(chatTime)
-					if !isCorrectTime {
-						continue
-					}
-
-					if currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() > chatTime.Minute() {
-						for _, messageID := range messageList {
-							message := tgbotapi.NewMessage(chat, "received today")
-							message.ReplyToMessageID = messageID
-							if _, err := m.bot.Send(message); err != nil {
+					for _, message := range messageList {
+						if isReadyToSend(chatTime, message.AddedAtTime) {
+							messageToForward := tgbotapi.NewMessage(chat, "received today")
+							messageToForward.ReplyToMessageID = message.MessageID
+							if _, err := m.bot.Send(messageToForward); err != nil {
 								log.Println(err)
 							}
+							m.storage.DeleteMessageByID(message.MessageID)
 						}
-						mutex.Lock()
-						chatToMessageList[chat] = make([]int, 0)
-						m.storage.DeleteMessageForChat(chat)
-						chatToMessageList, chatToTime = m.storage.getAllSheduledJobs()
-						mutex.Unlock()
-						break
 					}
+					mutex.Lock()
+					chatToMessageList, chatToTime = m.storage.getAllSheduledJobs()
+					mutex.Unlock()
 				}
 			}
 		case <-updateTicker.C:
@@ -158,19 +150,22 @@ func (m *messageForwarder) start() {
 	}
 }
 
-func isTimeSetNotToday(chatTime time.Time) bool {
+func isReadyToSend(chatTime, messageTime time.Time) bool {
 	currentTime := time.Now()
 
 	currentDay := currentTime.Day()
 	currentMonth := currentTime.Month()
 	currentYear := currentTime.Year()
 
-	isSetTodayBeforeTime := currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay == chatTime.Day() &&
-		(currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() >= chatTime.Minute())
-
 	isSetTomorowOrBefore := currentYear > chatTime.Year() ||
 		currentYear == chatTime.Year() && currentMonth > chatTime.Month() ||
 		currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay > chatTime.Day()
 
-	return isSetTomorowOrBefore || isSetTodayBeforeTime
+	isSendToday := currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay == chatTime.Day()
+
+	isSendBeforeTrigger := currentTime.Hour() > chatTime.Hour() && messageTime.Hour() < chatTime.Hour() ||
+		currentTime.Hour() == chatTime.Hour() && messageTime.Hour() == chatTime.Hour() &&
+			currentTime.Minute() >= chatTime.Minute() && messageTime.Minute() <= chatTime.Minute()
+
+	return isSetTomorowOrBefore || isSendToday && isSendBeforeTrigger
 }
