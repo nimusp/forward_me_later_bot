@@ -36,6 +36,21 @@ func NewStorage(dbLogin, dbPassword, dbName, dbHost, dbPort string) *MessageStor
 	}
 }
 
+func HerokuNewStorage(dbURL string) *MessageStorage {
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := db.Ping(); err != nil {
+		log.Fatal(err)
+	}
+
+	return &MessageStorage{
+		db:       db,
+		userList: make(map[int64]bool, 0),
+	}
+}
+
 func (s *MessageStorage) AddMessage(chatID int64, messageID int) {
 	if !s.isUserTunned(chatID) {
 		return

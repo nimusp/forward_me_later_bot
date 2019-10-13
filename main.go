@@ -12,13 +12,14 @@ const (
 )
 
 func main() {
+	dbURL := os.Getenv("DATABASE_URL")
 	token := os.Getenv(telegramBotTokenKey)
-	login := os.Getenv(dbLogin)
-	password := os.Getenv(dbPassword)
-	dbName := os.Getenv(dbName)
-	dbHost := os.Getenv(dbHost)
-	dbPort := os.Getenv(dbPort)
-	storage := NewStorage(login, password, dbName, dbHost, dbPort)
+	// login := os.Getenv(dbLogin)
+	// password := os.Getenv(dbPassword)
+	// dbName := os.Getenv(dbName)
+	// dbHost := os.Getenv(dbHost)
+	// dbPort := os.Getenv(dbPort)
+	storage := HerokuNewStorage(dbURL) //NewStorage(login, password, dbName, dbHost, dbPort)
 	messageHandler := NewHandler(token, storage)
 	messageHandler.Start()
 }
