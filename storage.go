@@ -56,11 +56,11 @@ func (s *MessageStorage) AddMessage(chatID int64, messageID int) {
 		log.Println(err)
 	}
 
-	log.Println("Chat: " + strconv.FormatInt(chatID, 10) + " message: " + strconv.Itoa(messageID))
+	log.Println("Chat: " + strconv.FormatInt(chatID, 10) + " message: " + strconv.Itoa(messageID) + " time " + time.Now().String())
 }
 
-func (s *MessageStorage) UpdateUserSettings(chatID int64, time string) {
-	parsedTime := parseTime(time)
+func (s *MessageStorage) UpdateUserSettings(chatID int64, timeFromMessage string) {
+	parsedTime := parseTime(timeFromMessage)
 
 	stmt, err := s.db.Prepare(
 		`INSERT INTO chats (id, time_to_forward)
@@ -79,7 +79,7 @@ func (s *MessageStorage) UpdateUserSettings(chatID int64, time string) {
 		return
 	}
 	s.userList[chatID] = true
-	log.Println("Set " + time + " for chat " + strconv.FormatInt(chatID, 10))
+	log.Println("Set "+timeFromMessage+" for chat "+strconv.FormatInt(chatID, 10), " time: "+parsedTime.String())
 }
 
 func (s *MessageStorage) isUserTunned(chatID int64) bool {
@@ -127,9 +127,14 @@ func parseTime(stringTime string) time.Time {
 	if err != nil {
 		log.Println(err)
 	}
+	// UTC + 3:00 only
+	// thx Telegram API
+	offsetInSeconds := 3 * 60 * 60
+	dif := -time.Duration(offsetInSeconds) * time.Second
+	castedTime = castedTime.Add(dif).UTC()
 
-	now := time.Now()
-	currentDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	now := time.Now().UTC()
+	currentDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
 	correctTime := currentDay.Add(
 		time.Hour*time.Duration(castedTime.Hour()) + time.Minute*time.Duration(castedTime.Minute()),
@@ -139,15 +144,7 @@ func parseTime(stringTime string) time.Time {
 }
 
 func (s *MessageStorage) getAllSheduledJobs() (map[int64][]Message, map[int64]time.Time) {
-	size := s.db.QueryRow(
-		`SELECT COUNT(messages.message_id)
-		 FROM messages
-		 GROUP BY messages.message_id
-		 ORDER BY DESC
-		 LIMIT 1`,
-	)
-	var dataSize int
-	size.Scan(&dataSize)
+	var dataSize int = 5
 
 	chatToMessage := make(map[int64][]Message, dataSize)
 	chatToTime := make(map[int64]time.Time, dataSize)
