@@ -1,0 +1,25 @@
+version: '3.5'
+
+services:
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_DB: "postgres"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  bot:
+    build: .
+    depends_on:
+      - db
+    restart: always
+    environment:
+      TOKEN: "${TOKEN}"
+      LOGIN: "postgres"
+      PASSWORD: "postgres"
+      NAME: "postgres"
+      HOST: db
+      PORT: 5432
