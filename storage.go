@@ -20,8 +20,8 @@ type Message struct {
 	AddedAtTime time.Time
 }
 
-func NewStorage(dbLogin, dbPassword, dbName string) *MessageStorage {
-	dataSourseName := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", dbLogin, dbPassword, dbName)
+func NewStorage(dbLogin, dbPassword, dbName, dbHost, dbPort string) *MessageStorage {
+	dataSourseName := fmt.Sprintf("host =%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbHost, dbPort, dbLogin, dbPassword, dbName)
 	db, err := sql.Open("postgres", dataSourseName)
 	if err != nil {
 		log.Fatal(err)
