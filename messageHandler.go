@@ -157,6 +157,9 @@ func isReadyToSend(chatTime, messageTime time.Time) bool {
 	currentMonth := currentTime.Month()
 	currentYear := currentTime.Year()
 
+	isCorrectTimeOfDay := chatTime.Hour() > currentTime.Hour() ||
+		chatTime.Hour() == currentTime.Hour() && chatTime.Minute() >= currentTime.Minute()
+
 	isSetTomorowOrBefore := currentYear > chatTime.Year() ||
 		currentYear == chatTime.Year() && currentMonth > chatTime.Month() ||
 		currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay > chatTime.Day()
@@ -167,5 +170,5 @@ func isReadyToSend(chatTime, messageTime time.Time) bool {
 		currentTime.Hour() == chatTime.Hour() && messageTime.Hour() == chatTime.Hour() &&
 			currentTime.Minute() >= chatTime.Minute() && messageTime.Minute() <= chatTime.Minute()
 
-	return isSetTomorowOrBefore || isSendToday && isSendBeforeTrigger
+	return isCorrectTimeOfDay && isSetTomorowOrBefore || isSendToday && isSendBeforeTrigger
 }
