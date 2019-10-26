@@ -157,18 +157,16 @@ func isReadyToSend(chatTime, messageTime time.Time) bool {
 	currentMonth := currentTime.Month()
 	currentYear := currentTime.Year()
 
-	isCorrectTimeOfDay := chatTime.Hour() < currentTime.Hour() ||
-		chatTime.Hour() == currentTime.Hour() && chatTime.Minute() <= currentTime.Minute()
-
-	isSetTomorowOrBefore := currentYear > chatTime.Year() ||
+	isSetTriggerTomorowOrBefore := currentYear > chatTime.Year() ||
 		currentYear == chatTime.Year() && currentMonth > chatTime.Month() ||
 		currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay > chatTime.Day()
 
-	isSendToday := currentYear == chatTime.Year() && currentMonth == chatTime.Month() && currentDay == chatTime.Day()
+	isSendAfterTrigger := messageTime.Hour() > chatTime.Hour() || messageTime.Hour() == chatTime.Hour() && messageTime.Minute() >= chatTime.Minute()
 
-	isSendBeforeTrigger := currentTime.Hour() > chatTime.Hour() && messageTime.Hour() < chatTime.Hour() ||
-		currentTime.Hour() == chatTime.Hour() && messageTime.Hour() == chatTime.Hour() &&
-			currentTime.Minute() >= chatTime.Minute() && messageTime.Minute() <= chatTime.Minute()
+	isSendBeforeTrigger := messageTime.Hour() < chatTime.Hour() ||
+		messageTime.Hour() == chatTime.Hour() && messageTime.Minute() <= chatTime.Minute()
 
-	return isCorrectTimeOfDay && isSetTomorowOrBefore || isSendToday && isSendBeforeTrigger
+	isReadyByTime := currentTime.Hour() > chatTime.Hour() || currentTime.Hour() == chatTime.Hour() && currentTime.Minute() >= chatTime.Minute()
+
+	return isReadyByTime && (isSendAfterTrigger && isSetTriggerTomorowOrBefore || isSendBeforeTrigger)
 }
